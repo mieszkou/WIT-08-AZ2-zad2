@@ -1,6 +1,13 @@
 # Urbanowski Mieszko nr alb 3421
 # Skrypt zakładający konta w Azure AD na podstawie plików csv w folderze $inFolder
-
+#
+# Przy problemach z logowaniem: 
+# (...)
+# One or more errors occurred. (Could not load type 'System.Security.Cryptography.SHA256Cng' from assembly 'System.Core, Version=4.0.0.0, Culture=neutral, PublicKeyToken=...'.): Could not load type
+#      | 'System.Security.Cryptography.SHA256Cng' from assembly 'System.Core, Version=4.0.0.0, Culture=neutral, PublicKeyToken=...'.
+# (...)
+# to pomoglo: Import-Module AzureAD -UseWindowsPowerShell 
+# 🤷
 $tenantid = "5a652136-437b-4def-ba0f-b7ae2ea2da58"
 $externalIdExtensionProperty = "extension_bf88dea2157f4090ad834774ae1602e6_externalid"
 
@@ -14,7 +21,14 @@ Set-Location -Path $(Split-Path -Parent $PSCommandPath)
 $logFile = "$logfolder\$(get-date -uformat %Y%m%d)_user_create.log"
 $fileList = Get-ChildItem -Path $inFolder -Filter *.csv
 
-$Credentials = Get-Credential
+# Logowanie danymi odczytanymi z pliku
+# $Credentials = Import-CliXml "credentials.xml"
+# Logowanie interaktywne - prompt o login/hasło
+# $Credentials = Get-Credential
+
+# Tworzenie pliku z hasłami (aby przyspieszyć testowanie)
+# $Credentials = Get-Credential
+# $Credentials | Export-CliXml "credentials.xml"
 
 function Write-Log 
 { 
@@ -64,6 +78,11 @@ try {
     Write-Log "ERROR $_"
     exit
 }
+
+Remove-AzureADUser -ObjectId "adamek@witkuo.onmicrosoft.com"
+Remove-AzureADUser -ObjectId "sylplatf@witkuo.onmicrosoft.com"
+Remove-AzureADUser -ObjectId "marek@witkuo.onmicrosoft.com"
+Remove-AzureADUser -ObjectId "pawelzonk@witkuo.onmicrosoft.com"
 
 ForEach ($fileObj in $fileList) {
     $file = "$inFolder\$($fileObj.Name)"
@@ -137,6 +156,5 @@ ForEach ($fileObj in $fileList) {
     Write-Host
 }
 
-Write-Host "Naciśnij dowolny klawisz"
-Write-Host -Object ('{0}' -f [System.Console]::ReadKey().Key.ToString());
+Read-Host -Prompt "Naciśnij enter"
 

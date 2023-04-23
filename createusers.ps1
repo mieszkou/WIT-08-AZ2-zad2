@@ -10,13 +10,16 @@
 # 🤷
 
 
+
+$tenantid = "5a652136-437b-4def-ba0f-b7ae2ea2da58"
+$externalIdExtensionProperty = "extension_bf88dea2157f4090ad834774ae1602e6_externalid"
+
 $inFolder = ".\in"
 $outFolder = ".\out"
 $errorFolder = ".\error"
 $logFolder = ".\log"
 
-$tenantid = "5a652136-437b-4def-ba0f-b7ae2ea2da58"
-$externalIdExtensionProperty = "extension_bf88dea2157f4090ad834774ae1602e6_externalid"
+Set-Location -Path $(Split-Path -Parent $PSCommandPath)
 
 $logFile = "$logfolder\$(get-date -uformat %Y%m%d)_user_create.log"
 $fileList = Get-ChildItem -Path $inFolder -Filter *.csv
@@ -63,9 +66,10 @@ function Write-UserData
         [string]$pass
     )
 
-    $outFile = "$outFolder/$(get-date -uformat %Y%m%d%H%M%S).txt"
+    $outFile = "$outFolder\$(get-date -format "yyyy-MM-dd_HHmmss_fff").txt"
     Add-content $outFile -Value $login
     Add-content $outFile -Value $pass
+    $outFile
 }
 
 Import-Module AzureAD
@@ -78,7 +82,13 @@ try {
     exit
 }
 
-ForEach ($file in $fileList) {
+Remove-AzureADUser -ObjectId "adamek@witkuo.onmicrosoft.com"
+Remove-AzureADUser -ObjectId "sylplatf@witkuo.onmicrosoft.com"
+Remove-AzureADUser -ObjectId "marek@witkuo.onmicrosoft.com"
+Remove-AzureADUser -ObjectId "pawelzonk@witkuo.onmicrosoft.com"
+
+ForEach ($fileObj in $fileList) {
+    $file = "$inFolder\$($fileObj.Name)"
 
     Write-Host "📄 $file"
 
@@ -127,29 +137,27 @@ ForEach ($file in $fileList) {
         if(!($newUser = New-AzureADUser -DisplayName $displayName -UserPrincipalName $userPrincipalName -AccountEnabled $true -PasswordProfile $passwordProfile -MailNickName $mailNick -Department $data.dzial -City $data.lokalizacja)) {
             Throw("Błąd przy tworzeniu konta")
         }
-             
-        if(!(Add-AzureADGroupMember -ObjectId $group.ObjectId -RefObjectId $newUser.ObjectId)) {
-            Throw("Błąd przy przypisaniu grupy")            
-        }
         
-        # jak utwurzyć https://learn.microsoft.com/en-us/azure/active-directory/external-identities/user-flow-add-custom-attributes
-        if(!(Set-AzureADUserExtension -ObjectId $newUser.ObjectId -ExtensionName $externalIdExtensionProperty -ExtensionValue $externalId)) {
-            Throw("Błąd przy przypisaniu external ID")            
-        }
+        Write-UserData -outFolder $outFolder -login $userPrincipalName -pass $passwordProfile.Password
+        Add-AzureADGroupMember -ObjectId $group.ObjectId -RefObjectId $newUser.ObjectId
+
+        # jak utworzyć https://learn.microsoft.com/en-us/azure/active-directory/external-identities/user-flow-add-custom-attributes
+        Set-AzureADUserExtension -ObjectId $newUser.ObjectId -ExtensionName $externalIdExtensionProperty -ExtensionValue $externalId
 
         Write-Host "✅ Użytkownik $($data.imie) $($data.nazwisko) został dodany."
         Write-Log "SUCCESS: Użytkownik $($data.email) $($data.imie) $($data.nazwisko) został dodany."
         
-        Write-UserData($outFolder, $userPrincipalName, $passwordProfile.Password)
+        
                
-        $file | Move-Item -Destination "$outFolder\arch\$(get-date -uformat %Y%m%d%H%M%S)_$($file.BaseName).csv"
+        $file | Move-Item -Destination "$outFolder\arch\$(get-date -uformat %Y%m%d%H%M%S)_$($fileObj.BaseName).csv"
     } catch {
         Write-Host "🛑 $_"
         Write-Log "ERROR $_"
         
-        $file | Move-Item -Destination "$errorFolder\$(get-date -uformat %Y%m%d%H%M%S)_$($file.BaseName).csv"
+        $file | Move-Item -Destination "$errorFolder\$(get-date -uformat %Y%m%d%H%M%S)_$($fileObj.BaseName).csv"
     }
     Write-Host
 }
+
 Read-Host -Prompt "Naciśnij enter"
 
